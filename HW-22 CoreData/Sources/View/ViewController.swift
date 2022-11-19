@@ -7,10 +7,11 @@
 
 import UIKit
 import SnapKit
+import CoreData
 
 class ViewController: UIViewController {
     
-    var names = ["John", "Miki", "Bob"]
+    var people: [NSManagedObject] = []
     
     // MARK: - Outlets
     
@@ -38,6 +39,7 @@ class ViewController: UIViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
         tableView.backgroundColor = .systemGray5
         tableView.dataSource = self
+        tableView.delegate = self
         return tableView
     }()
     
@@ -46,10 +48,35 @@ class ViewController: UIViewController {
         if textField.text == "" {
             showAlert()
         } else {
-            names.append(textField.text ?? "yo")
+            save(name: textField.text ?? "", key: "name")
             self.textField.text = ""
         }
         tableView.reloadData()
+    }
+    
+    public func save(name: String, key: String) {
+        guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else {
+            return
+        }
+        
+        // 1
+        let managedContext = appDelegate.persistentContainer.viewContext
+        
+        // 2
+        guard let entity = NSEntityDescription.entity(forEntityName: "Person", in: managedContext) else { return }
+        
+        let person = NSManagedObject(entity: entity, insertInto: managedContext)
+        
+        // 3
+        person.setValue(name, forKeyPath: key)
+        
+        // 4
+        do {
+            try managedContext.save()
+            people.append(person)
+        } catch let error as NSError {
+            print("Could not save. \(error), \(error.userInfo)")
+        }
     }
     
     func showAlert() {
@@ -60,6 +87,30 @@ class ViewController: UIViewController {
         
         alert.addAction(UIAlertAction(title: "Ok", style: .cancel))
         self.present(alert, animated: true)
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        //1
+        guard let appDelegate =
+                UIApplication.shared.delegate as? AppDelegate else {
+            return
+        }
+        
+        let managedContext =
+        appDelegate.persistentContainer.viewContext
+        
+        //2
+        let fetchRequest =
+        NSFetchRequest<NSManagedObject>(entityName: "Person")
+        
+        //3
+        do {
+            people = try managedContext.fetch(fetchRequest)
+        } catch let error as NSError {
+            print("Could not fetch. \(error), \(error.userInfo)")
+        }
     }
     
     override func viewDidLoad() {
@@ -100,27 +151,44 @@ class ViewController: UIViewController {
     }
 }
 
-extension ViewController: UITableViewDataSource {
+extension ViewController: UITableViewDataSource, UITableViewDelegate {
+    
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        50
+    }
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        names.count
+        people.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let person = people[indexPath.row]
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        cell.textLabel?.text = names[indexPath.row]
+        cell.textLabel?.text = person.value(forKey: "name") as? String
         cell.backgroundColor = .white
         cell.accessoryType = .disclosureIndicator
         return cell
     }
     
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
+        guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else {
+            return
+        }
+        let managedContext = appDelegate.persistentContainer.viewContext
         if editingStyle == .delete {
             tableView.beginUpdates()
-            names.remove(at: indexPath.row)
+            managedContext.delete(people.remove(at: indexPath.row))
+            try? managedContext.save()
             tableView.deleteRows(at: [indexPath], with: .fade)
             tableView.endUpdates()
         }
+    }
+    
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        let viewController = ProfileViewController()
+        tableView.deselectRow(at: indexPath, animated: true)
+        viewController.names = people[indexPath.row]
+        navigationController?.pushViewController(viewController, animated: true)
     }
     
 }
