@@ -6,3 +6,9 @@
 //
 
 import Foundation
+
+struct Persons {
+    var name: String
+}
+
+
